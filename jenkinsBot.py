@@ -209,17 +209,8 @@ class JenkinsBot(BotPlugin):
         if len(args) == 0:
             return 'What Job would you like the parameters for?'
 
-        self.connect_to_jenkins()
-
-        job = self.jenkins.get_job_info(args[0])
-        if job['actions'][1] != {}:
-            job_param = job['actions'][1]['parameterDefinitions']
-        elif job['actions'][0] != {}:
-            job_param = job['actions'][0]['parameterDefinitions']
-        else:
-            job_param = []
-
-        return self.format_params(job_param)
+        job_params = self.get_job_parameters(args[0])        
+        return self.format_params(job_params)
 
     @botcmd(split_args_with=None)
     def jenkins_build(self, mess, args):
@@ -233,8 +224,8 @@ class JenkinsBot(BotPlugin):
         params = self.build_parameters(args[1:])
 
         # Is it a parameterized job ?
-        job = self.jenkins.get_job_info(args[0])
-        if job['actions'][0] == {} and job['actions'][1] == {}:
+        job_params = self.get_job_parameters(args[0])
+        if job_params == []:
             self.jenkins.build_job(args[0])
         else:
             self.jenkins.build_job(args[0], params)
@@ -432,6 +423,25 @@ class JenkinsBot(BotPlugin):
         self.log.debug('Querying Jenkins for job "{0}"'.format(search_term))
         return [job for job in self.jenkins.get_jobs(folder_depth=None)
                 if search_term.lower() == job['fullname'].lower()]
+
+    def get_job_parameters(self, job_name):
+        self.connect_to_jenkins()
+
+        job = self.jenkins.get_job_info(job_name)
+
+        # Look for parameters under the "actions" array
+        if 'actions' in job:
+            for job_actions in job['actions']:
+                if 'parameterDefinitions' in job_actions:
+                    return job_actions['parameterDefinitions']
+            
+        # Also look under the "property" array
+        if 'property' in job:
+            for job_property in job['property']:
+                if 'parameterDefinitions' in job_property:
+                    return job_property['parameterDefinitions']
+
+        return []
 
     def format_running_jobs(self, jobs):
         if len(jobs) == 0:
